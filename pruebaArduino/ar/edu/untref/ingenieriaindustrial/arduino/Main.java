@@ -26,7 +26,7 @@ public class Main {
 		while (portList.hasMoreElements()) {
 			CommPortIdentifier portId = (CommPortIdentifier) portList.nextElement();
 			if (portId.getPortType() == CommPortIdentifier.PORT_SERIAL) {
-				if (portId.getName().equals("COM12")) {
+				if (portId.getName().equals("COM6")) {
 					//AverageTemperatureCalculator reader = new AverageTemperatureCalculator(cantidadDeTemperaturas, portId);
 					//reader.startReading();
 					

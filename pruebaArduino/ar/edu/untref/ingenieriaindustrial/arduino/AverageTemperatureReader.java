@@ -16,17 +16,20 @@ public class AverageTemperatureReader implements SerialPortEventListener {
 
 	private int cantidadDeTemperaturas;
 	private OutputStream outputStream;
-	private Thread readThread;
 	private SerialPort serialPort;
 	private InputStream inputStream;
-
+	private StringBuilder paqueteDeLectura = new StringBuilder();
+	private String[] valoresDeLosSensores;
+	private double temperaturaPromedio = 22.0;
+	private double humedadPromedio = 33.0;
+	private double O2Promedio = 60.0;
 
 	public AverageTemperatureReader(int cantidadDeTemperaturas, CommPortIdentifier portId) {
 
 		this.cantidadDeTemperaturas = cantidadDeTemperaturas;
 
 		try {
-			serialPort = (SerialPort) portId.open("sketch_may22a", 2000);
+			serialPort = (SerialPort) portId.open("Simple", 2000);
 
 			try {
 				outputStream = serialPort.getOutputStream();
@@ -72,11 +75,7 @@ public class AverageTemperatureReader implements SerialPortEventListener {
 		}
 	}
 	
-
-	@Override
 	public void serialEvent(SerialPortEvent event) {
-		
-		System.err.println("entro al switch");
 		
 		switch (event.getEventType()) {
 		case SerialPortEvent.BI:
@@ -90,22 +89,113 @@ public class AverageTemperatureReader implements SerialPortEventListener {
 		case SerialPortEvent.OUTPUT_BUFFER_EMPTY:
 			break;
 		case SerialPortEvent.DATA_AVAILABLE:
-			byte[] readBuffer = new byte[40];
 
 			try {
+				byte[] readBuffer = new byte[inputStream.available()];
 
 				while (inputStream.available() > 0) {
 					inputStream.read(readBuffer);
 				}
 
 				String lectura = new String(readBuffer).trim();
-				System.out.println("recibi: " + lectura);
+				paqueteDeLectura.append(lectura);
+				if (lectura.contains("-")) {
+					desglosarPaqueteDeLectura();
+					calcularTemperaturaPromedio(valoresDeLosSensores);
+					calcularHumedadPromedio(valoresDeLosSensores);
+					calcular02Promedio(valoresDeLosSensores);
+					System.out.println("tempProm: " + temperaturaPromedio + " humProm: " + humedadPromedio + " 02Prom: " + O2Promedio);
+				}
 				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 			break;
 		}
+	}
+
+	private void calcular02Promedio(String[] valoresDeLosSensores) {
+		double sumatoria = 0.0;
+		int cnt = 0;
+		for (int i = 4; i < 5; i++) {
+			if (revisarO2(valoresDeLosSensores[i])) {
+				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
+				cnt++;
+			}else{
+				generarAlerta("02", i + 1 + "");
+			}
+		}
+		
+		if (cnt != 0) {
+			O2Promedio = sumatoria / cnt;
+		}else{
+			O2Promedio = 0.0;
+		}
+	}
+
+	private void generarAlerta(String tipoSensor, String nroSensor) {
+		System.out.println("El sensor de " + tipoSensor + " numero " + nroSensor + " ha fallado.");
+	}
+
+	private void calcularHumedadPromedio(String[] valoresDeLosSensores) {
+		double sumatoria = 0.0;
+		int cnt = 0;
+		for (int i = 2; i < 4; i++) {
+			if (revisarHumedad(valoresDeLosSensores[i])) {
+				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
+				cnt++;
+			}else{
+				generarAlerta("humedad", i + 1 + "");
+			}
+		}
+		if (cnt != 0) {
+			humedadPromedio = sumatoria / cnt;
+		}else{
+			humedadPromedio = 0.0;
+		}
+	}
+	
+	private void calcularTemperaturaPromedio(String[] valoresDeLosSensores) {
+		double sumatoria = 0.0;
+		int cnt = 0;
+		for (int i = 0; i < 2; i++) {
+			if (revisarTemperatura(valoresDeLosSensores[i])) {
+				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
+				cnt++;
+			}else{
+				generarAlerta("temperatura", (i + 1) + "");
+			}
+		}
+		
+		if (cnt != 0) {
+			temperaturaPromedio = sumatoria / cnt;
+		}else{
+			temperaturaPromedio = 0.0;
+		}
+	}
+
+
+	private boolean revisarTemperatura(String temperatura) {
+		return true;
+		
+	}
+
+	private boolean revisarHumedad(String humedad) {
+		return true;
+	}
+
+	private boolean revisarO2(String O2) {
+		if (!(Math.abs(temperaturaPromedio - Double.parseDouble(O2)) > 5.0 )) {
+		return true;
+		}else{
+			return false;
+		}
+	}
+
+	private void desglosarPaqueteDeLectura() {
+		String paqueteDeLecturaProcesado = paqueteDeLectura.toString().replace("-", "");
+		valoresDeLosSensores = (paqueteDeLecturaProcesado).split("/");
+		paqueteDeLectura = new StringBuilder();
 	}
 
 }
