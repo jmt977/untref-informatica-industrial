@@ -10,6 +10,8 @@ import gnu.io.UnsupportedCommOperationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.TooManyListenersException;
 
 public class CompostManager implements SerialPortEventListener {
@@ -23,6 +25,8 @@ public class CompostManager implements SerialPortEventListener {
 	private double humedadPromedio = 33.0;
 	private double O2Promedio = 40.0;
 	private boolean ventiladorEncendido = false;
+	private Timer timer;
+	private boolean regando = false;
 
 	public CompostManager(CommPortIdentifier portId) {
 
@@ -32,6 +36,28 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				outputStream = serialPort.getOutputStream();
 				inputStream = serialPort.getInputStream();
+				TimerTask timerTask = new TimerTask()
+				{
+
+					public void run() 
+					{
+						regando = true;
+						System.out.println("regando");
+						encenderVentilador();
+						try {
+							Thread.sleep(6000);
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						regando = false;
+					}
+				};
+
+				// Aquí se pone en marcha el timer cada segundo.
+				Timer timer = new Timer();
+				// Dentro de 0 milisegundos avísame cada 1000 milisegundos
+				timer.scheduleAtFixedRate(timerTask, 0, 30000);
 			} catch (IOException e) {
 				System.out.println(e);
 			}
@@ -91,7 +117,7 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				byte[] readBuffer = new byte[inputStream.available()];
 
-				while (inputStream.available() > 0) {
+				while (inputStream.available() > 0 && !regando) {
 					inputStream.read(readBuffer);
 				}
 
@@ -237,5 +263,10 @@ public class CompostManager implements SerialPortEventListener {
 		valoresDeLosSensores = (paqueteDeLecturaProcesado).split("/");
 		paqueteDeLectura = new StringBuilder();
 	}
+
+
+
+
+
 
 }
