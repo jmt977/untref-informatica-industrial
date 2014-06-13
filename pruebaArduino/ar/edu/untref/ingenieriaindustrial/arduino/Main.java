@@ -19,12 +19,9 @@ public class Main {
 		while (portList.hasMoreElements()) {
 			CommPortIdentifier portId = (CommPortIdentifier) portList.nextElement();
 			if (portId.getPortType() == CommPortIdentifier.PORT_SERIAL) {
-				if (portId.getName().equals("COM9")) {
-					//AverageTemperatureCalculator reader = new AverageTemperatureCalculator(cantidadDeTemperaturas, portId);
-					//reader.startReading();
-
-					CompostManager averageTemperatureReader = new CompostManager(portId);
-					averageTemperatureReader.startReading();
+				if (portId.getName().equals("COM5")) {
+					CompostManager averageTemperatureReader = new CompostManager(portId, 20000, 5000, 30.0, 25.0);
+					averageTemperatureReader.start();
 				}
 			}
 		}
