@@ -27,8 +27,19 @@ public class CompostManager implements SerialPortEventListener {
 	private boolean ventiladorEncendido = false;
 	private Timer timer;
 	private boolean regando = false;
+	private String lectura;
+	private long frecuenciaDeRiego;
+	private long duracionDeRiego;
+	private double temperaturaEncendidoDelVentilador;
+	private double temperaturaApagadoDelVentilador;
+	private TimerTask timerTask;
+	//private int contador = 0;
+	public CompostManager(CommPortIdentifier portId, long frecuenciaDeRiego, final long duracionDeRiego, double temperaturaEncendidoDelVentilador, double temperaturaApagadoDelVentilador) {
 
-	public CompostManager(CommPortIdentifier portId) {
+		this.temperaturaApagadoDelVentilador = temperaturaApagadoDelVentilador;
+		this.temperaturaEncendidoDelVentilador = temperaturaEncendidoDelVentilador;
+		this.frecuenciaDeRiego = frecuenciaDeRiego;
+		this.duracionDeRiego = duracionDeRiego;
 
 		try {
 			serialPort = (SerialPort) portId.open("Simple", 2000);
@@ -36,28 +47,23 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				outputStream = serialPort.getOutputStream();
 				inputStream = serialPort.getInputStream();
-				TimerTask timerTask = new TimerTask()
-				{
+				timerTask = new TimerTask() {
 
-					public void run() 
-					{
-						regando = true;
-						System.out.println("regando");
-						encenderVentilador();
+					public void run() {
+
 						try {
-							Thread.sleep(6000);
+							regar();
+							Thread.sleep(duracionDeRiego);
+							pararDeRegar();
 						} catch (InterruptedException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-						regando = false;
+
 					}
 				};
 
-				// Aquí se pone en marcha el timer cada segundo.
-				Timer timer = new Timer();
-				// Dentro de 0 milisegundos avísame cada 1000 milisegundos
-				timer.scheduleAtFixedRate(timerTask, 0, 30000);
+				timer = new Timer();
 			} catch (IOException e) {
 				System.out.println(e);
 			}
@@ -78,25 +84,9 @@ public class CompostManager implements SerialPortEventListener {
 		}
 	}
 
-	public void startReading() {
-
-		try {
-
-			serialPort.notifyOnDataAvailable(true);
-			//outputStream.write(this.cantidadDeTemperaturas);
-			outputStream.flush();
-		} catch (IOException e) {
-
-			e.printStackTrace();
-
-		} finally {
-
-			try {
-				outputStream.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+	public void start() {
+		serialPort.notifyOnDataAvailable(true);
+		timer.scheduleAtFixedRate(timerTask, 5000, frecuenciaDeRiego);
 	}
 
 	public void serialEvent(SerialPortEvent event) {
@@ -117,18 +107,24 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				byte[] readBuffer = new byte[inputStream.available()];
 
-				while (inputStream.available() > 0 && !regando) {
-					inputStream.read(readBuffer);
+				while (inputStream.available() > 0) {
+					if (!regando) {
+						inputStream.read(readBuffer);
+					}else{
+						readBuffer = new byte[inputStream.available()];
+						break;
+					}
 				}
-
-				String lectura = new String(readBuffer).trim();
+				lectura = new String(readBuffer).trim();
+				//contador++;
+				//System.out.println("LECTURA: "+ contador + " : " + lectura);
 				paqueteDeLectura.append(lectura);
 				if (lectura.contains("-")) {
 					desglosarPaqueteDeLectura();
 					calcularTemperaturaPromedio(valoresDeLosSensores);
 					calcularHumedadPromedio(valoresDeLosSensores);
 					calcular02Promedio(valoresDeLosSensores);
-					System.out.println("tempProm: " + temperaturaPromedio + " humProm: " + humedadPromedio + " 02Prom: " + O2Promedio);
+					System.out.println("tempProm: " + temperaturaPromedio + " humProm: " + humedadPromedio + " O2Prom: " + O2Promedio);
 				}
 
 			} catch (Exception e) {
@@ -194,39 +190,13 @@ public class CompostManager implements SerialPortEventListener {
 			temperaturaPromedio = 0.0;
 		}
 
-		if (temperaturaPromedio <= 30.0 && ventiladorEncendido) {
+		if (temperaturaPromedio <= temperaturaApagadoDelVentilador && ventiladorEncendido) {
 			apagarVentilador();
 		}
-		if (temperaturaPromedio > 30.0 && temperaturaPromedio <= 40) {
+		if (temperaturaPromedio > temperaturaEncendidoDelVentilador) {
 			if (!ventiladorEncendido) {
 				encenderVentilador();
 			}
-		}else{
-			if (temperaturaPromedio > 40) {
-				System.out.println("se prendio fuego. Llamar bomberos");
-			}
-		}
-	}
-
-	private void encenderVentilador() {
-		try {
-			System.out.println("ENCENDIDO");
-			ventiladorEncendido = true;
-			outputStream.write(49);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-
-	private void apagarVentilador() {
-		try {
-			ventiladorEncendido = false;
-			System.out.println("APAGADO");
-			outputStream.write(48);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
 
@@ -264,9 +234,56 @@ public class CompostManager implements SerialPortEventListener {
 		paqueteDeLectura = new StringBuilder();
 	}
 
+	private void encenderVentilador() {
+		try {
+			System.out.println("ENCENDIDO");
+			ventiladorEncendido = true;
+			outputStream.write(49);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 
+	private void apagarVentilador() {
+		try {
+			ventiladorEncendido = false;
+			System.out.println("APAGADO");
+			outputStream.write(48);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 
+	private void regar() {
+		try {
+			if (!regando) {
+				System.out.println("REGANDO");
+				regando = true;
+				serialPort.notifyOnDataAvailable(false);
+				ventiladorEncendido = true;
+				outputStream.write(49);
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 
-
+	private void pararDeRegar() {
+		try {
+			if (regando) {
+				System.out.println("REGADO APAGADO");
+				regando = false;
+				serialPort.notifyOnDataAvailable(true);
+				ventiladorEncendido = false;
+				outputStream.write(48);
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 
 }
