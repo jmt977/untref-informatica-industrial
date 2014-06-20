@@ -21,23 +21,46 @@ public class CompostManager implements SerialPortEventListener {
 	private InputStream inputStream;
 	private StringBuilder paqueteDeLectura = new StringBuilder();
 	private String[] valoresDeLosSensores;
-	private double temperaturaPromedio = 22.0;
-	private double humedadPromedio = 33.0;
-	private double O2Promedio = 40.0;
+	
+	private double[] sensorTemperatura = new double[2];
+	private double[] sensorHumedad = new double[2];
+	private double[] sensorO2 = new double[1];
+	
 	private boolean ventiladorEncendido = false;
-	private Timer timer;
 	private boolean regando = false;
+	private boolean mezclando;
+	
 	private String lectura;
 	private long frecuenciaDeRiego;
 	private long duracionDeRiego;
-	private double temperaturaEncendidoDelVentilador;
-	private double temperaturaApagadoDelVentilador;
-	private TimerTask timerTask;
-	//private int contador = 0;
-	public CompostManager(CommPortIdentifier portId, long frecuenciaDeRiego, final long duracionDeRiego, double temperaturaEncendidoDelVentilador, double temperaturaApagadoDelVentilador) {
+	
+	private double temperaturaParaEncendidoDelVentilador;
+	private double temperaturaParaApagadoDelVentilador;
+	
+	private double humedadParaRegado;
+	private double humedadParaFinDeRegado;
+	
+	private double cantidadOxigenoParaMezclar;
+	private double cantidadOxigenoParaDejarDeMezclar;
+	
+	private TimerTask regarTimerTask;
+	private TimerTask mezclarTimerTask;
+	private TimerTask ventilarTimerTask;
+	
+	private Timer ventilarTimer;
+	private Timer regarTimer;
+	private Timer mezclarTimer;
 
-		this.temperaturaApagadoDelVentilador = temperaturaApagadoDelVentilador;
-		this.temperaturaEncendidoDelVentilador = temperaturaEncendidoDelVentilador;
+	public CompostManager(CommPortIdentifier portId, long frecuenciaDeRiego, final long duracionDeRiego, double temperaturaParaEncendidoDelVentilador, double temperaturaParaApagadoDelVentilador, double humedadParaRegado,
+			double humedadParaFinDeRegado, double cantidadOxigenoParaMezclar,
+			double cantidadOxigenoParaDejarDeMezclar) {
+
+		this.temperaturaParaEncendidoDelVentilador = temperaturaParaEncendidoDelVentilador;
+		this.temperaturaParaApagadoDelVentilador = temperaturaParaApagadoDelVentilador;
+		this.humedadParaRegado = humedadParaRegado;
+		this.humedadParaFinDeRegado = humedadParaFinDeRegado;
+		this.cantidadOxigenoParaMezclar = cantidadOxigenoParaMezclar;
+		this.cantidadOxigenoParaDejarDeMezclar = cantidadOxigenoParaDejarDeMezclar;
 		this.frecuenciaDeRiego = frecuenciaDeRiego;
 		this.duracionDeRiego = duracionDeRiego;
 
@@ -47,7 +70,7 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				outputStream = serialPort.getOutputStream();
 				inputStream = serialPort.getInputStream();
-				timerTask = new TimerTask() {
+				regarTimerTask = new TimerTask() {
 
 					public void run() {
 
@@ -62,8 +85,43 @@ public class CompostManager implements SerialPortEventListener {
 
 					}
 				};
+				
+				ventilarTimerTask = new TimerTask() {
 
-				timer = new Timer();
+					public void run() {
+
+						try {
+							encenderVentilador();
+							Thread.sleep(duracionDeRiego);
+							apagarVentilador();
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+
+					}
+				};
+				
+				mezclarTimerTask = new TimerTask() {
+
+					public void run() {
+
+						try {
+							mezclar();
+							Thread.sleep(duracionDeRiego);
+							pararDeMezclar();
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+
+					}
+				};
+
+				ventilarTimer = new Timer();
+				regarTimer = new Timer();
+				mezclarTimer = new Timer();
+				
 			} catch (IOException e) {
 				System.out.println(e);
 			}
@@ -86,7 +144,9 @@ public class CompostManager implements SerialPortEventListener {
 
 	public void start() {
 		serialPort.notifyOnDataAvailable(true);
-		timer.scheduleAtFixedRate(timerTask, 5000, frecuenciaDeRiego);
+		regarTimer.scheduleAtFixedRate(regarTimerTask, 25000, frecuenciaDeRiego);
+		mezclarTimer.scheduleAtFixedRate(mezclarTimerTask, 15000, frecuenciaDeRiego);
+		ventilarTimer.scheduleAtFixedRate(ventilarTimerTask, 5000, frecuenciaDeRiego);
 	}
 
 	public void serialEvent(SerialPortEvent event) {
@@ -121,10 +181,11 @@ public class CompostManager implements SerialPortEventListener {
 				paqueteDeLectura.append(lectura);
 				if (lectura.contains("-")) {
 					desglosarPaqueteDeLectura();
-					calcularTemperaturaPromedio(valoresDeLosSensores);
-					calcularHumedadPromedio(valoresDeLosSensores);
-					calcular02Promedio(valoresDeLosSensores);
-					System.out.println("tempProm: " + temperaturaPromedio + " humProm: " + humedadPromedio + " O2Prom: " + O2Promedio);
+					System.out.println("TEMPERATURA SENSOR 1: " + sensorTemperatura[0] + " °C");
+					System.out.println("TEMPERATURA SENSOR 2: " + sensorTemperatura[1] + " °C");
+					System.out.println("HUMEDAD SENSOR 1: " + sensorHumedad[0] + " %");
+					System.out.println("HUMEDAD SENSOR 2: " + sensorHumedad[1] + " %");
+					System.out.println("O2 SENSOR 1: " + sensorO2[0] + " %");
 				}
 
 			} catch (Exception e) {
@@ -134,109 +195,25 @@ public class CompostManager implements SerialPortEventListener {
 		}
 	}
 
-	private void calcular02Promedio(String[] valoresDeLosSensores) {
-		double sumatoria = 0.0;
-		int cnt = 0;
-		for (int i = 4; i < 5; i++) {
-			if (revisarO2(valoresDeLosSensores[i])) {
-				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
-				cnt++;
-			}else{
-				generarAlerta("02", i + 1 + "");
-			}
-		}
-
-		if (cnt != 0) {
-			O2Promedio = sumatoria / cnt;
-		}else{
-			O2Promedio = 0.0;
-		}
-	}
-
-	private void calcularHumedadPromedio(String[] valoresDeLosSensores) {
-		double sumatoria = 0.0;
-		int cnt = 0;
-		for (int i = 2; i < 4; i++) {
-			if (revisarHumedad(valoresDeLosSensores[i])) {
-				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
-				cnt++;
-			}else{
-				generarAlerta("humedad", i + 1 + "");
-			}
-		}
-		if (cnt != 0) {
-			humedadPromedio = sumatoria / cnt;
-		}else{
-			humedadPromedio = 0.0;
-		}
-
-	}
-
-	private void calcularTemperaturaPromedio(String[] valoresDeLosSensores) {
-		double sumatoria = 0.0;
-		int cnt = 0;
-		for (int i = 0; i < 2; i++) {
-			if (revisarTemperatura(valoresDeLosSensores[i])) {
-				sumatoria += Double.parseDouble(valoresDeLosSensores[i]);
-				cnt++;
-			}else{
-				generarAlerta("temperatura", (i + 1) + "");
-			}
-		}
-
-		if (cnt != 0) {
-			temperaturaPromedio = sumatoria / cnt;
-		}else{
-			temperaturaPromedio = 0.0;
-		}
-
-		if (temperaturaPromedio <= temperaturaApagadoDelVentilador && ventiladorEncendido) {
-			apagarVentilador();
-		}
-		if (temperaturaPromedio > temperaturaEncendidoDelVentilador) {
-			if (!ventiladorEncendido) {
-				encenderVentilador();
-			}
-		}
-	}
-
-	private void generarAlerta(String tipoSensor, String nroSensor) {
-		System.out.println("El sensor de " + tipoSensor + " numero " + nroSensor + " ha fallado.");
-	}
-
-	private boolean revisarTemperatura(String temperatura) {
-		if (!(Math.abs(temperaturaPromedio - Double.parseDouble(temperatura)) > 25.0 )) {
-			return true;
-		}else{
-			return false;
-		}
-	}
-
-	private boolean revisarHumedad(String humedad) {
-		if (!(Math.abs(humedadPromedio - Double.parseDouble(humedad)) > 5.0 )) {
-			return true;
-		}else{
-			return false;
-		}
-	}
-
-	private boolean revisarO2(String O2) {
-		if (!(Math.abs(O2Promedio - Double.parseDouble(O2)) > 5.0 )) {
-			return true;
-		}else{
-			return false;
-		}
-	}
 
 	private void desglosarPaqueteDeLectura() {
 		String paqueteDeLecturaProcesado = paqueteDeLectura.toString().replace("-", "");
 		valoresDeLosSensores = (paqueteDeLecturaProcesado).split("/");
+		
+		sensorTemperatura[0] = Double.parseDouble(valoresDeLosSensores[0]);
+		sensorTemperatura[1] = Double.parseDouble(valoresDeLosSensores[1]);
+		
+		sensorHumedad[0] = Double.parseDouble(valoresDeLosSensores[2]);
+		sensorHumedad[1] = Double.parseDouble(valoresDeLosSensores[3]);
+		
+		sensorO2[0] = Double.parseDouble(valoresDeLosSensores[4]);
+		
 		paqueteDeLectura = new StringBuilder();
 	}
 
 	private void encenderVentilador() {
 		try {
-			System.out.println("ENCENDIDO");
+			System.out.println("VENTILADOR ENCENDIDO");
 			ventiladorEncendido = true;
 			outputStream.write(49);
 		} catch (IOException e) {
@@ -248,7 +225,7 @@ public class CompostManager implements SerialPortEventListener {
 	private void apagarVentilador() {
 		try {
 			ventiladorEncendido = false;
-			System.out.println("APAGADO");
+			System.out.println("VENTILADOR APAGADO");
 			outputStream.write(48);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -262,8 +239,7 @@ public class CompostManager implements SerialPortEventListener {
 				System.out.println("REGANDO");
 				regando = true;
 				serialPort.notifyOnDataAvailable(false);
-				ventiladorEncendido = true;
-				outputStream.write(49);
+				outputStream.write(52);
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -277,13 +253,52 @@ public class CompostManager implements SerialPortEventListener {
 				System.out.println("REGADO APAGADO");
 				regando = false;
 				serialPort.notifyOnDataAvailable(true);
-				ventiladorEncendido = false;
-				outputStream.write(48);
+				outputStream.write(53);
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+	
+	private void mezclar() {
+		try {
+			if (!mezclando) {
+				System.out.println("MEZCLANDO");
+				mezclando = true;
+				serialPort.notifyOnDataAvailable(true);
+				outputStream.write(50);
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	private void pararDeMezclar() {
+		try {
+			if (mezclando) {
+				System.out.println("MEZCLADO APAGADO");
+				mezclando = false;
+				serialPort.notifyOnDataAvailable(true);
+				outputStream.write(51);
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public boolean isVentilando() {
+		return this.ventiladorEncendido;
+	}
+	
+	public boolean isRegando() {
+		return this.regando;
+	}
+	
+	public boolean isMezclando() {
+		return this.mezclando;
 	}
 
 }
