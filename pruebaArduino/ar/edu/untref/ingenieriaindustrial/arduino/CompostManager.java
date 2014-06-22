@@ -70,6 +70,8 @@ public class CompostManager implements SerialPortEventListener {
 			try {
 				outputStream = serialPort.getOutputStream();
 				inputStream = serialPort.getInputStream();
+				
+				//definimos los timer para cada actividad: regar, ventilar y mezclar. 
 				regarTimerTask = new TimerTask() {
 
 					public void run() {
@@ -144,6 +146,8 @@ public class CompostManager implements SerialPortEventListener {
 
 	public void start() {
 		serialPort.notifyOnDataAvailable(true);
+		
+		//Iniciamos los timer
 		regarTimer.scheduleAtFixedRate(regarTimerTask, 25000, frecuenciaDeRiego);
 		mezclarTimer.scheduleAtFixedRate(mezclarTimerTask, 15000, frecuenciaDeRiego);
 		ventilarTimer.scheduleAtFixedRate(ventilarTimerTask, 5000, frecuenciaDeRiego);
@@ -176,9 +180,10 @@ public class CompostManager implements SerialPortEventListener {
 					}
 				}
 				lectura = new String(readBuffer).trim();
-				//contador++;
-				//System.out.println("LECTURA: "+ contador + " : " + lectura);
 				paqueteDeLectura.append(lectura);
+				
+				/*Si recibimos un guion, entonces el paquete de lectura llegó 
+				completo y lo desglosamos*/
 				if (lectura.contains("-")) {
 					desglosarPaqueteDeLectura();
 					System.out.println("TEMPERATURA SENSOR 1: " + sensorTemperatura[0] + " °C");
@@ -215,7 +220,9 @@ public class CompostManager implements SerialPortEventListener {
 		try {
 			System.out.println("VENTILADOR ENCENDIDO");
 			ventiladorEncendido = true;
-			outputStream.write(49);
+			
+			//los parámetros numéricos corresponden a los dsitintos actuadores en el arduino
+			outputStream.write(49); 
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
