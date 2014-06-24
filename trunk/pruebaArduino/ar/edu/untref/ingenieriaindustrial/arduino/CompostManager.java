@@ -232,8 +232,6 @@ public class CompostManager implements SerialPortEventListener {
 		if (cantidadDeRepeticionesDelCaracterDeCorteDeLinea == 1) {
 			String paqueteDeLecturaProcesado = paqueteDeLectura.toString().replace("-", "");
 
-			System.out.println(paqueteDeLecturaProcesado);
-
 			valoresDeLosSensores = (paqueteDeLecturaProcesado).split("/");
 
 			sensoresDeTemperatura[0] = Double.parseDouble(valoresDeLosSensores[0]);
@@ -254,28 +252,39 @@ public class CompostManager implements SerialPortEventListener {
 
 	private void controlarValores() {
 
+		int cntDeTodosLosSensoresDeTemperaturaCorrectos = 0;
 		for (int i = 0; i < sensoresDeTemperatura.length; i++) {
 			if (sensoresDeTemperatura[i] > temperaturaParaEncendidoDelVentilador && !ventiladorEncendido && !realizandoMantenimiento) {
 				System.out.println("EL COMPOST HA SUPERADO LA TEMPERATURA RECOMENDADA, SE PROCEDE A VENTILAR");
 				realizandoAjusteTemperatura = true;
 				encenderVentilador();
-			}else if (sensoresDeTemperatura[i] <= temperaturaParaApagadoDelVentilador && ventiladorEncendido && !realizandoMantenimiento) {
-				System.out.println("EL COMPOST HA RECUPERADO LA TEMPERATURA RECOMENDADA");
-				apagarVentilador();
-				realizandoAjusteTemperatura = false;
 			}
+			
+			cntDeTodosLosSensoresDeTemperaturaCorrectos = sensoresDeTemperatura[i] <= temperaturaParaApagadoDelVentilador ? ++cntDeTodosLosSensoresDeTemperaturaCorrectos : cntDeTodosLosSensoresDeTemperaturaCorrectos;
+			
+		}
+		if (cntDeTodosLosSensoresDeTemperaturaCorrectos == sensoresDeTemperatura.length && ventiladorEncendido && !realizandoMantenimiento) {
+			System.out.println("EL COMPOST HA RECUPERADO LA TEMPERATURA RECOMENDADA");
+			apagarVentilador();
+			realizandoAjusteTemperatura = false;
 		}
 
+		int cntDeTodosLosSensoresDeHumedadCorrectos = 0;
 		for (int i = 0; i < sensoresDeHumedad.length; i++) {
 			if (sensoresDeHumedad[i] < humedadParaRegado && !regando && !realizandoMantenimiento) {
 				System.out.println("SE HA DETECTADO MENOS HUMEDAD DE LA RECOMENDADA EN EL COMPOST, SE PROCEDE A REGAR");
 				realizandoAjusteHumedad = true;
 				regar();
-			}else if (sensoresDeHumedad[i] >= humedadParaFinDeRegado && regando && !realizandoMantenimiento) {
-				System.out.println("EL COMPOST HA RECUPERADO LA HUMEDAD RECOMENDADA");
-				pararDeRegar();
-				realizandoAjusteHumedad = false;
 			}
+			
+			cntDeTodosLosSensoresDeHumedadCorrectos = sensoresDeHumedad[i] >= humedadParaFinDeRegado ? ++cntDeTodosLosSensoresDeTemperaturaCorrectos : cntDeTodosLosSensoresDeHumedadCorrectos;
+		}
+		
+		
+		if (cntDeTodosLosSensoresDeHumedadCorrectos == sensoresDeHumedad.length && regando && !realizandoMantenimiento) {
+			System.out.println("EL COMPOST HA RECUPERADO LA HUMEDAD RECOMENDADA");
+			pararDeRegar();
+			realizandoAjusteHumedad = false;
 		}
 
 		if (sensoresDeO2[0] < cantidadOxigenoParaMezclar && !mezclando && !realizandoMantenimiento) {
