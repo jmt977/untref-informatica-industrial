@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="http://java.sun.com/xml/ns/persistence"
+	version="2.0">
+
+	<persistence-unit name="compost-PersistenceUnit"
+		transaction-type="RESOURCE_LOCAL">
+
+		<provider>org.hibernate.ejb.HibernatePersistence</provider>
+		<non-jta-data-source>java:/compost-ds</non-jta-data-source>
+
+		<!-- Entidades -->
+		<class>ar.edu.untref.ingcomputacion.industrial.modelo.Sensor</class>
+		<class>ar.edu.untref.ingcomputacion.industrial.modelo.Muestra</class>
+		<class>ar.edu.untref.ingcomputacion.industrial.modelo.Configuracion</class>
+
+		<properties>
+			<property name="hibernate.show_sql" value="false" />
+			<property name="hibernate.format_sql" value="false" />
+			<property name="hibernate.hbm2ddl.auto" value="update" />
+			<property name="hibernate.transaction.jta.platform"
+				value="org.hibernate.service.jta.platform.internal.JBossAppServerJtaPlatform" />
+			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQL5InnoDBDialect" />
+		</properties>
+
+	</persistence-unit>
+</persistence>
