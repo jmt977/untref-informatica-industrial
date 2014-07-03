@@ -27,7 +27,9 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 
+import ar.edu.untref.ingcomputacion.industrial.administradores.AdministradorDeConfiguracion;
 import ar.edu.untref.ingcomputacion.industrial.administradores.AdministradorDeMuestras;
+import ar.edu.untref.ingcomputacion.industrial.modelo.Configuracion;
 
 public class CompostManager implements SerialPortEventListener {
 
@@ -80,6 +82,8 @@ public class CompostManager implements SerialPortEventListener {
 	private Timer regarTimer;
 	private Timer mezclarTimer;
 
+	private AdministradorDeConfiguracion administradorConfiguracion;
+
 	public CompostManager(CommPortIdentifier portId,
 			long frecuenciaDeRiego, final long duracionDeRiego,
 			long frecuenciaDeMezclado, final long duracionDeMezclado,
@@ -90,6 +94,8 @@ public class CompostManager implements SerialPortEventListener {
 
 		this.administradorDeMuestras = new AdministradorDeMuestras();
 		configurarLimpiezaDeMuestras();
+		
+		this.administradorConfiguracion = new AdministradorDeConfiguracion();
 		
 		this.temperaturaParaEncendidoDelVentilador = temperaturaParaEncendidoDelVentilador;
 		this.temperaturaParaApagadoDelVentilador = temperaturaParaApagadoDelVentilador;
@@ -304,13 +310,15 @@ public class CompostManager implements SerialPortEventListener {
 
 	private void controlarValores() {
 
+		actualizarValoresMinimosYMaximos();
+		
 		int cntDeTodosLosSensoresDeTemperaturaCorrectos = 0;
 		for (int i = 0; i < sensoresDeTemperatura.length; i++) {
 			if (sensoresDeTemperatura[i] > temperaturaParaEncendidoDelVentilador && !ventiladorEncendido && !realizandoMantenimiento) {
 				System.out.println("EL COMPOST HA SUPERADO LA TEMPERATURA RECOMENDADA, SE PROCEDE A VENTILAR");
 				realizandoAjusteTemperatura = true;
 				encenderVentilador();
-				enviarPushNotification("Compost ALERTA", "Se ha superado la temperatura recomendada: ventilando");
+				notificarAlUsuario("Compost ALERTA", "Se ha superado la temperatura recomendada: ventilando");
 			}
 			
 			cntDeTodosLosSensoresDeTemperaturaCorrectos = sensoresDeTemperatura[i] <= temperaturaParaApagadoDelVentilador ? ++cntDeTodosLosSensoresDeTemperaturaCorrectos : cntDeTodosLosSensoresDeTemperaturaCorrectos;
@@ -320,7 +328,7 @@ public class CompostManager implements SerialPortEventListener {
 			System.out.println("EL COMPOST HA RECUPERADO LA TEMPERATURA RECOMENDADA");
 			apagarVentilador();
 			realizandoAjusteTemperatura = false;
-			enviarPushNotification("Compost OK", "Se ha recuperado la temperatura recomendada");
+			notificarAlUsuario("Compost OK", "Se ha recuperado la temperatura recomendada");
 		}
 
 		int cntDeTodosLosSensoresDeHumedadCorrectos = 0;
@@ -329,7 +337,7 @@ public class CompostManager implements SerialPortEventListener {
 				System.out.println("SE HA DETECTADO MENOS HUMEDAD DE LA RECOMENDADA EN EL COMPOST, SE PROCEDE A REGAR");
 				realizandoAjusteHumedad = true;
 				regar();
-				enviarPushNotification("Compost ALERTA", "Se ha bajado de la humedad recomendada: regando");
+				notificarAlUsuario("Compost ALERTA", "Se ha bajado de la humedad recomendada: regando");
 			}
 			
 			cntDeTodosLosSensoresDeHumedadCorrectos = sensoresDeHumedad[i] >= humedadParaFinDeRegado ? ++cntDeTodosLosSensoresDeTemperaturaCorrectos : cntDeTodosLosSensoresDeHumedadCorrectos;
@@ -340,7 +348,7 @@ public class CompostManager implements SerialPortEventListener {
 			System.out.println("EL COMPOST HA RECUPERADO LA HUMEDAD RECOMENDADA");
 			pararDeRegar();
 			realizandoAjusteHumedad = false;
-			enviarPushNotification("Compost OK", "Se ha recuperado la humedad recomendada");
+			notificarAlUsuario("Compost OK", "Se ha recuperado la humedad recomendada");
 		}
 
 		if (sensoresDeO2[0] < cantidadOxigenoParaMezclar && !mezclando && !realizandoMantenimiento) {
@@ -354,6 +362,17 @@ public class CompostManager implements SerialPortEventListener {
 		}
 
 
+	}
+
+	private void actualizarValoresMinimosYMaximos() {
+		
+		Configuracion configuracion = administradorConfiguracion.obtener();
+		
+		this.temperaturaParaEncendidoDelVentilador = configuracion.getTemperaturaMaxima();
+		this.temperaturaParaApagadoDelVentilador = configuracion.getTemperaturaMaxima() - 2;
+		
+		this.humedadParaRegado = configuracion.getHumedadMinima();
+		this.humedadParaFinDeRegado = configuracion.getHumedadMaxima();
 	}
 
 	public void encenderVentilador() {
@@ -487,15 +506,27 @@ public class CompostManager implements SerialPortEventListener {
 		this.cantidadOxigenoParaDejarDeMezclar = cantidadOxigenoParaDejarDeMezclar;
 	}
 	
-	public void enviarPushNotification(String titulo, String mensaje) {
+	public void notificarAlUsuario(String titulo, String mensaje) {
 
-        String apiKey = "AIzaSyCQFM1qmFJH9pIqrZEQKcA2eYM8zbe7o0Q";
+        enviarPushNotification(titulo, mensaje);
+        enviarEmail(titulo, mensaje);
+	}
+
+
+	private void enviarPushNotification(String titulo, String mensaje) {
+		String apiKey = "AIzaSyCQFM1qmFJH9pIqrZEQKcA2eYM8zbe7o0Q";
         Content c = new Content();
 
         c.addRegId("APA91bHuiBZContobKFzHQiNJTRWfKU7IVVDulgsPik3k6js4rdDmz73iSfWzN8w_HdjmRqhUcipL5761kjsE5vXwvZc8hDEC-u3HQAsxGkQMySoyLRpl9ssu3uC7ihfnjOyyTZZVYVOlaseuu-m0rluWW30AaaIIl402o3yeYduhTYsMFU_s339ujrpnohRE770DGJQPWxs");
         c.createData(titulo, mensaje);
 
         POST2GCM.post(apiKey, c);
+	}
+
+	private void enviarEmail(String titulo, String mensaje) {
+		
+		String[] destino = {"frodriguez.arceri@gmail.com"};
+		ServicioDeEnvioDeEmails.enviar(destino, titulo, mensaje);
 	}
 	
 }
