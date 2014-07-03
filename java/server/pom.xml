@@ -43,7 +43,7 @@
 							</execution>
 						</executions>
 					</plugin>
-					
+
 				</plugins>
 				<resources>
 					<resource>
@@ -152,6 +152,13 @@
 			<scope>system</scope>
 			<systemPath>${project.basedir}/src/main/webapp/WEB-INF/lib/RXTXcomm-2.2pre2.jar</systemPath>
 		</dependency>
+
+		<dependency>
+			<groupId>javax.mail</groupId>
+			<artifactId>mail</artifactId>
+			<version>1.4</version>
+		</dependency>
+
 
 	</dependencies>
 </project>

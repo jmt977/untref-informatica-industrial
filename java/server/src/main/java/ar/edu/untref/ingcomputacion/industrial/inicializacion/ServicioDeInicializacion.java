@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import ar.edu.untref.ingcomputacion.industrial.administradores.AdministradorDeConfiguracion;
 import ar.edu.untref.ingcomputacion.industrial.arduino.CompostManager;
+import ar.edu.untref.ingcomputacion.industrial.arduino.ServicioDeEnvioDeEmails;
 import ar.edu.untref.ingcomputacion.industrial.modelo.Configuracion;
 
 public class ServicioDeInicializacion implements ServletContextListener {
@@ -48,6 +49,7 @@ public class ServicioDeInicializacion implements ServletContextListener {
 				}
 			}
 		}
+		
 		
 	}
 
