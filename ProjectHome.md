@@ -1,0 +1,1 @@
+Software para controlar un Arduino con sensor de temperatura desde una app Java
